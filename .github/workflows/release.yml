@@ -34,7 +34,7 @@ jobs:
           for runtime in linux-x64 win-x64; do
             output_dir="artifacts/$runtime"
 
-            dotnet publish move.csproj \
+            dotnet publish src/move/move.csproj \
               -c Release \
               -r "$runtime" \
               --self-contained true \

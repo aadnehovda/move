@@ -1,0 +1,8 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/move/move.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Move.IntegrationTests/Move.IntegrationTests.csproj" />
+  </Folder>
+</Solution>

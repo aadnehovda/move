@@ -15,7 +15,7 @@ It is designed for sync-style workflows where destination files may already exis
 ## Build
 
 ```bash
-dotnet build
+dotnet build move.slnx
 ```
 
 ## Command Shape
@@ -53,37 +53,37 @@ When `--overwrite` is not used and the destination file already exists:
 Copy everything from one directory tree into another:
 
 ```bash
-dotnet run -- /data/incoming /data/archive --keep-source
+dotnet run --project src/move -- /data/incoming /data/archive --keep-source
 ```
 
 Move only `.csv` files:
 
 ```bash
-dotnet run -- /data/incoming /data/archive --pattern "*.csv"
+dotnet run --project src/move -- /data/incoming /data/archive --pattern "*.csv"
 ```
 
 Move up to 500 gzip or text files whose first line starts with `HDR|`:
 
 ```bash
-dotnet run -- /data/incoming /data/archive --search "HDR|" --count 500
+dotnet run --project src/move -- /data/incoming /data/archive --search "HDR|" --count 500
 ```
 
 Preview what a move would do without changing anything:
 
 ```bash
-dotnet run -- /data/incoming /data/archive --dry-run --verbose
+dotnet run --project src/move -- /data/incoming /data/archive --dry-run --verbose
 ```
 
 Copy using up to 8 workers and overwrite existing destination files:
 
 ```bash
-dotnet run -- /data/incoming /data/archive --keep-source --maxdop 8 --overwrite
+dotnet run --project src/move -- /data/incoming /data/archive --keep-source --maxdop 8 --overwrite
 ```
 
 Prune source files when matching destination files already exist, without checking timestamps or size:
 
 ```bash
-dotnet run -- /data/incoming /data/archive --accept-existing
+dotnet run --project src/move -- /data/incoming /data/archive --accept-existing
 ```
 
 ## Output

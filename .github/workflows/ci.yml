@@ -1,0 +1,37 @@
+name: Build And Test
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - 'v*.*.*'
+      - '*.*.*'
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+    env:
+      DOTNET_NOLOGO: true
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Restore
+        run: dotnet restore move.slnx
+
+      - name: Build
+        run: dotnet build move.slnx --configuration Release --no-restore
+
+      - name: Test
+        run: dotnet test move.slnx --configuration Release --no-build
