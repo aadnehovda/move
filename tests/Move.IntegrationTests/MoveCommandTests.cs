@@ -126,4 +126,35 @@ public sealed class MoveCommandTests : IClassFixture<MoveCliFixture>
         Assert.Equal(beforeSource, TestWorkspace.RelativeFiles(workspace.SourceDir));
         Assert.Equal(beforeTarget, TestWorkspace.RelativeFiles(workspace.TargetDir));
     }
+
+    [Fact]
+    public async Task Move_does_not_prune_empty_source_directories_by_default()
+    {
+        using var workspace = new TestWorkspace();
+        workspace.AddSourceText("2026/08/02/file001.txt", "HDR|1", "alpha");
+
+        var leafDirectory = Path.Combine(workspace.SourceDir, "2026", "08", "02");
+
+        var result = await _cli.RunAsync(workspace.SourceDir, workspace.TargetDir);
+
+        Assert.Equal(0, result.ExitCode);
+        Assert.True(Directory.Exists(leafDirectory));
+    }
+
+    [Fact]
+    public async Task Move_prunes_empty_source_directories_when_flag_is_set()
+    {
+        using var workspace = new TestWorkspace();
+        workspace.AddSourceText("2026/08/02/file001.txt", "HDR|1", "alpha");
+
+        var yearDirectory = Path.Combine(workspace.SourceDir, "2026");
+        var leafDirectory = Path.Combine(workspace.SourceDir, "2026", "08", "02");
+
+        var result = await _cli.RunAsync(workspace.SourceDir, workspace.TargetDir, "--prune-empty-dirs");
+
+        Assert.Equal(0, result.ExitCode);
+        Assert.False(Directory.Exists(leafDirectory));
+        Assert.False(Directory.Exists(yearDirectory));
+        Assert.True(Directory.Exists(workspace.SourceDir));
+    }
 }

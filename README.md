@@ -33,6 +33,7 @@ move <SourceDir> <TargetDir> [options]
 - `--search`, `-s`: Only process files whose first line starts with the given text
 - `--maxdop`, `-j`: Maximum degree of parallelism. Default: `-1`
 - `--keep-source`: Copy files instead of moving them
+- `--prune-empty-dirs`: Remove empty source directories after move operations complete
 - `--overwrite`: Replace an existing destination file
 - `--accept-existing`: Treat any existing destination file as already synced without checking metadata
 - `--dry-run`: Report what would happen without copying or moving files
@@ -91,3 +92,18 @@ dotnet run --project src/move -- /data/incoming /data/archive --accept-existing
 - Progress is written periodically to standard error
 - Final totals are written to standard error
 - Verbose per-file diagnostics are written to standard output
+
+## Performance Benchmarks
+
+The repository also includes a BenchmarkDotNet harness for exploring filesystem strategy tradeoffs around existing destination files.
+
+Run it with:
+
+```bash
+dotnet run -c Release --project tests/Move.PerfTests -- --filter "*ExistingTargetStrategy*"
+```
+
+It compares two approaches across missing-target, matching-target, and conflicting-target scenarios:
+
+- pre-check `target.Exists` before acting
+- attempt the file action directly and handle `already exists` exceptions

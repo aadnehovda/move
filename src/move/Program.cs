@@ -8,6 +8,7 @@ using System.CommandLine;
 
 using System.IO.Compression;
 using System.Diagnostics;
+using System.Collections.Concurrent;
 
 Argument<DirectoryInfo> arg_source_dir = new("SourceDir") { Arity = ArgumentArity.ExactlyOne, Description = "The source directory." };
 arg_source_dir.AcceptExistingOnly();
@@ -19,6 +20,7 @@ Option<int?> arg_count = new("--count", "-n") { Description = "Number of files t
 Option<string> arg_search = new("--search", "-s") { Description = "Only process files whose first line starts with this value. Supports .gz files as well as plain text." };
 Option<int> arg_max_dop = new("--maxdop", "-j") { Description = "Maximum number of worker threads.", DefaultValueFactory = _ => -1 };
 Option<bool> arg_keep_source = new("--keep-source") { Description = "Copy files into TargetDir and keep the source files in place." };
+Option<bool> arg_prune_empty_dirs = new("--prune-empty-dirs") { Description = "Remove empty source directories after move operations complete." };
 Option<bool> arg_overwrite = new("--overwrite") { Description = "Replace an existing destination file." };
 Option<bool> arg_accept_existing = new("--accept-existing") { Description = "Treat any existing destination file as already synced without checking metadata." };
 Option<bool> arg_dry_run = new("--dry-run") { Description = "Report what would happen without copying or moving files." };
@@ -33,6 +35,7 @@ var root = new RootCommand("Copy or move files into TargetDir in parallel, with 
 	arg_search,
 	arg_max_dop,
 	arg_keep_source,
+	arg_prune_empty_dirs,
 	arg_overwrite,
 	arg_accept_existing,
 	arg_dry_run,
@@ -51,6 +54,7 @@ async Task Run(ParseResult cli, CancellationToken token)
 	var search = cli.GetValue(arg_search);
 	var count = cli.GetValue(arg_count);
 	var keep_source = cli.GetValue(arg_keep_source);
+	var prune_empty_dirs = cli.GetValue(arg_prune_empty_dirs);
 	var overwrite = cli.GetValue(arg_overwrite);
 	var accept_existing = cli.GetValue(arg_accept_existing);
 	var dry_run = cli.GetValue(arg_dry_run);
@@ -61,6 +65,7 @@ async Task Run(ParseResult cli, CancellationToken token)
 	var start = Stopwatch.GetTimestamp();
 	var progress = new PeriodicTimer(TimeSpan.FromSeconds(3));
 	var report = Reporter();
+	var touched_source_dirs = new ConcurrentDictionary<string, byte>(StringComparer.Ordinal);
 
 	try
 	{
@@ -77,6 +82,9 @@ async Task Run(ParseResult cli, CancellationToken token)
 
 		using (progress)
 			await Parallel.ForEachAsync(files, options, ProcessFile);
+
+		if (!keep_source && prune_empty_dirs)
+			PruneEmptySourceDirectories();
 	}
 	catch (OperationCanceledException)
 	{
@@ -148,10 +156,10 @@ async Task Run(ParseResult cli, CancellationToken token)
 			{
 				target_file.Directory?.Create();
 				action(source_file.FullName, target_file.FullName, overwrite);
+				RememberSourceDirectory(source_file.Directory);
 			}
 		}
-		catch (IOException ex) when (!overwrite &&
-		                             ex.HResult is ERROR_ALREADY_EXISTS or ERROR_FILE_EXISTS)
+		catch (IOException ex) when (!overwrite && LooksLikeAlreadyExists(ex, target_file))
 		{
 			await HandleExistingTarget();
 		}
@@ -174,7 +182,10 @@ async Task Run(ParseResult cli, CancellationToken token)
 				else
 				{
 					if (!dry_run)
+					{
 						source_file.Delete();
+						RememberSourceDirectory(source_file.Directory);
+					}
 					if (verbose)
 						await cli.InvocationConfiguration.Output.WriteLineAsync(
 							$"{{ log: \"debug\", \"op\": \"prune-source\", {details} }}");
@@ -186,6 +197,51 @@ async Task Run(ParseResult cli, CancellationToken token)
 			if (verbose)
 				await cli.InvocationConfiguration.Output.WriteLineAsync(
 					$"{{ log: \"debug\", op: \"conflict\", {details} }}");
+		}
+
+		bool LooksLikeAlreadyExists(IOException ex, FileInfo target) =>
+			ex.HResult is ERROR_ALREADY_EXISTS or ERROR_FILE_EXISTS || target.Exists;
+	}
+
+	void RememberSourceDirectory(DirectoryInfo? directory)
+	{
+		if (directory is null)
+			return;
+
+		var path = directory.FullName;
+		if (path.Length <= source_dir.FullName.Length)
+			return;
+
+		touched_source_dirs.TryAdd(path, 0);
+	}
+
+	void PruneEmptySourceDirectories()
+	{
+		foreach (var path in touched_source_dirs.Keys.OrderByDescending(path => path.Length))
+		{
+			var current = path;
+
+			while (current.Length > source_dir.FullName.Length)
+			{
+				try
+				{
+					Directory.Delete(current);
+				}
+				catch (IOException)
+				{
+					break;
+				}
+				catch (UnauthorizedAccessException)
+				{
+					break;
+				}
+
+				var parent = Directory.GetParent(current);
+				if (parent is null)
+					break;
+
+				current = parent.FullName;
+			}
 		}
 	}
 }
