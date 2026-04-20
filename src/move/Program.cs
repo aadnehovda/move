@@ -225,6 +225,9 @@ async Task Run(ParseResult cli, CancellationToken token)
 				try
 				{
 					Directory.Delete(current);
+					if (verbose)
+						cli.InvocationConfiguration.Output.WriteLine(
+							$"{{ log: \"debug\", \"op\": \"prune-dir\", source: \"{current}\" }}");
 				}
 				catch (IOException)
 				{

@@ -175,4 +175,17 @@ public sealed class MoveCommandTests : IClassFixture<MoveCliFixture>
         Assert.True(Directory.Exists(siblingDirectory));
         Assert.True(File.Exists(Path.Combine(siblingDirectory, "keep.txt")));
     }
+
+    [Fact]
+    public async Task Prune_empty_dirs_logs_pruned_directories_when_verbose()
+    {
+        using var workspace = new TestWorkspace();
+        workspace.AddSourceText("2026/08/02/file001.txt", "HDR|1", "alpha");
+
+        var result = await _cli.RunAsync(workspace.SourceDir, workspace.TargetDir, "--prune-empty-dirs", "--verbose");
+
+        Assert.Equal(0, result.ExitCode);
+        Assert.Contains("\"op\": \"prune-dir\"", result.StdOut, StringComparison.Ordinal);
+        Assert.Contains(Path.Combine(workspace.SourceDir, "2026", "08", "02"), result.StdOut, StringComparison.Ordinal);
+    }
 }
