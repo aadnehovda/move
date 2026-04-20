@@ -157,4 +157,22 @@ public sealed class MoveCommandTests : IClassFixture<MoveCliFixture>
         Assert.False(Directory.Exists(yearDirectory));
         Assert.True(Directory.Exists(workspace.SourceDir));
     }
+
+    [Fact]
+    public async Task Prune_empty_dirs_does_not_delete_past_source_root()
+    {
+        using var workspace = new TestWorkspace();
+        workspace.AddSourceText("2026/08/02/file001.txt", "HDR|1", "alpha");
+
+        var siblingDirectory = Path.Combine(workspace.Root, "source-sibling");
+        Directory.CreateDirectory(siblingDirectory);
+        File.WriteAllText(Path.Combine(siblingDirectory, "keep.txt"), "keep");
+
+        var result = await _cli.RunAsync(workspace.SourceDir, workspace.TargetDir, "--prune-empty-dirs");
+
+        Assert.Equal(0, result.ExitCode);
+        Assert.True(Directory.Exists(workspace.SourceDir));
+        Assert.True(Directory.Exists(siblingDirectory));
+        Assert.True(File.Exists(Path.Combine(siblingDirectory, "keep.txt")));
+    }
 }
