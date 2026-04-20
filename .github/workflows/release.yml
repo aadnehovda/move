@@ -12,13 +12,15 @@ permissions:
 jobs:
   publish:
     runs-on: ubuntu-latest
+    env:
+      DOTNET_NOLOGO: true
 
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Set up .NET
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@v5
         with:
           dotnet-version: '10.0.x'
 
@@ -27,43 +29,36 @@ jobs:
           VERSION="${GITHUB_REF_NAME#v}"
           echo "VERSION=$VERSION" >> "$GITHUB_ENV"
 
-      - name: Publish linux-x64
+      - name: Publish release assets
         run: |
-          dotnet publish move.csproj \
-            -c Release \
-            -r linux-x64 \
-            --self-contained true \
-            -p:PublishSingleFile=true \
-            -p:DebugType=None \
-            -p:DebugSymbols=false \
-            -p:Version="$VERSION" \
-            -o artifacts/linux-x64
+          for runtime in linux-x64 win-x64; do
+            output_dir="artifacts/$runtime"
 
-      - name: Package linux-x64
-        run: |
-          tar -C artifacts/linux-x64 -czf "move-${VERSION}-linux-x64.tar.gz" .
+            dotnet publish move.csproj \
+              -c Release \
+              -r "$runtime" \
+              --self-contained true \
+              -p:PublishSingleFile=true \
+              -p:DebugType=None \
+              -p:DebugSymbols=false \
+              -p:Version="$VERSION" \
+              -o "$output_dir"
 
-      - name: Publish win-x64
-        run: |
-          dotnet publish move.csproj \
-            -c Release \
-            -r win-x64 \
-            --self-contained true \
-            -p:PublishSingleFile=true \
-            -p:DebugType=None \
-            -p:DebugSymbols=false \
-            -p:Version="$VERSION" \
-            -o artifacts/win-x64
-
-      - name: Package win-x64
-        run: |
-          cd artifacts/win-x64
-          zip -r "../../move-${VERSION}-win-x64.zip" .
+            if [ "$runtime" = "linux-x64" ]; then
+              tar -C "$output_dir" -czf "move-${VERSION}-${runtime}.tar.gz" .
+            else
+              (
+                cd "$output_dir"
+                zip -r "../../move-${VERSION}-${runtime}.zip" .
+              )
+            fi
+          done
 
       - name: Create GitHub release
-        uses: softprops/action-gh-release@v2
-        with:
-          generate_release_notes: true
-          files: |
-            move-${{ env.VERSION }}-linux-x64.tar.gz
-            move-${{ env.VERSION }}-win-x64.zip
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            --generate-notes \
+            "move-${VERSION}-linux-x64.tar.gz" \
+            "move-${VERSION}-win-x64.zip"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
