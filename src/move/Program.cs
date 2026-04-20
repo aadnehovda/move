@@ -69,10 +69,9 @@ async Task Run(ParseResult cli, CancellationToken token)
 
 	try
 	{
-		var files = source_dir
-			.EnumerateFiles(pattern, SearchOption.AllDirectories)
-			.ToAsyncEnumerable()
-			.Take(Range.EndAt(count ?? Index.End));
+		IEnumerable<FileInfo> files = source_dir.EnumerateFiles(pattern, SearchOption.AllDirectories);
+		if (count is int max_count)
+			files = files.Take(max_count);
 
 		ParallelOptions options = new()
 		{
