@@ -18,46 +18,39 @@ Option<string> arg_pattern = new("--pattern", "-p") { Description = "Only proces
 Option<int?> arg_count = new("--count", "-n") { Description = "Number of files to process." };
 Option<string> arg_search = new("--search", "-s") { Description = "Only process files whose first line starts with this value. Supports .gz files as well as plain text." };
 Option<int> arg_max_dop = new("--maxdop", "-j") { Description = "Maximum number of worker threads.", DefaultValueFactory = _ => -1 };
+Option<bool> arg_keep_source = new("--keep-source") { Description = "Copy files into TargetDir and keep the source files in place." };
 Option<bool> arg_overwrite = new("--overwrite") { Description = "Replace an existing destination file." };
 Option<bool> arg_accept_existing = new("--accept-existing") { Description = "Treat any existing destination file as already synced without checking metadata." };
 Option<bool> arg_dry_run = new("--dry-run") { Description = "Report what would happen without copying or moving files." };
 Option<bool> arg_verbose = new("--verbose", "-v") { Description = "Show more details." };
 
-Command move_command = new("move", "Move files into TargetDir and remove matching source files that are already synced.");
-Command copy_command = new("copy", "Copy files into TargetDir and leave the source files in place.");
-
-foreach (var command in new[] { move_command, copy_command })
-{
-	command.Arguments.Add(arg_source_dir);
-	command.Arguments.Add(arg_target_dir);
-	command.Options.Add(arg_pattern);
-	command.Options.Add(arg_count);
-	command.Options.Add(arg_search);
-	command.Options.Add(arg_max_dop);
-	command.Options.Add(arg_overwrite);
-	command.Options.Add(arg_accept_existing);
-	command.Options.Add(arg_dry_run);
-	command.Options.Add(arg_verbose);
-}
-
-move_command.SetAction((ParseResult cli, CancellationToken token) => Run(cli, isCopy: false, token));
-copy_command.SetAction((ParseResult cli, CancellationToken token) => Run(cli, isCopy: true, token));
-
 var root = new RootCommand("Copy or move files into TargetDir in parallel, with existing-file checks suited for sync-style workflows.")
 {
-	move_command,
-	copy_command
+	arg_source_dir,
+	arg_target_dir,
+	arg_pattern,
+	arg_count,
+	arg_search,
+	arg_max_dop,
+	arg_keep_source,
+	arg_overwrite,
+	arg_accept_existing,
+	arg_dry_run,
+	arg_verbose
 };
+
+root.SetAction((ParseResult cli, CancellationToken token) => Run(cli, token));
 
 return await root.Parse(args).InvokeAsync();
 
-async Task Run(ParseResult cli, bool isCopy, CancellationToken token)
+async Task Run(ParseResult cli, CancellationToken token)
 {
 	var source_dir = cli.GetRequiredValue(arg_source_dir);
 	var target_dir = cli.GetRequiredValue(arg_target_dir);
 	var pattern = cli.GetRequiredValue(arg_pattern);
 	var search = cli.GetValue(arg_search);
 	var count = cli.GetValue(arg_count);
+	var keep_source = cli.GetValue(arg_keep_source);
 	var overwrite = cli.GetValue(arg_overwrite);
 	var accept_existing = cli.GetValue(arg_accept_existing);
 	var dry_run = cli.GetValue(arg_dry_run);
@@ -146,7 +139,7 @@ async Task Run(ParseResult cli, bool isCopy, CancellationToken token)
 			return;
 		}
 
-		Action<string, string, bool> action = isCopy ? File.Copy : File.Move;
+		Action<string, string, bool> action = keep_source ? File.Copy : File.Move;
 		const int ERROR_ALREADY_EXISTS = unchecked((int)0x800700B7);
 		const int ERROR_FILE_EXISTS = unchecked((int)0x80070050);
 		try
@@ -172,7 +165,7 @@ async Task Run(ParseResult cli, bool isCopy, CancellationToken token)
 			if (accept_existing || (source_file.Length == target_file.Length &&
 			                        source_file.LastWriteTimeUtc == target_file.LastWriteTimeUtc))
 			{
-				if (isCopy)
+				if (keep_source)
 				{
 					if (verbose)
 						await cli.InvocationConfiguration.Output.WriteLineAsync(
