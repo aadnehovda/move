@@ -140,7 +140,7 @@ async Task Run(ParseResult cli, CancellationToken token)
 		if (!await FileHeaderMatches(source_file.FullName, search, cancel))
 			return;
 
-		if (!overwrite && target_file.Exists)
+		if (dry_run && !overwrite && target_file.Exists)
 		{
 			await HandleExistingTarget();
 			return;
@@ -216,7 +216,14 @@ async Task Run(ParseResult cli, CancellationToken token)
 
 	void PruneEmptySourceDirectories()
 	{
-		foreach (var path in touched_source_dirs.Keys.OrderByDescending(path => path.Length))
+		var candidates = source_dir
+			.EnumerateDirectories("*", SearchOption.AllDirectories)
+			.Select(directory => directory.FullName)
+			.Concat(touched_source_dirs.Keys)
+			.Distinct(StringComparer.Ordinal)
+			.OrderByDescending(path => path.Length);
+
+		foreach (var path in candidates)
 		{
 			var current = path;
 

@@ -128,6 +128,24 @@ public sealed class MoveCommandTests : IClassFixture<MoveCliFixture>
     }
 
     [Fact]
+    public async Task Dry_run_with_existing_target_keeps_source_and_target_unchanged()
+    {
+        using var workspace = new TestWorkspace();
+        const string relativePath = "2026/08/02/file001.txt";
+        workspace.AddSourceText(relativePath, "HDR|1", "alpha");
+        workspace.AddTargetText(relativePath, "HDR|1", "alpha");
+
+        var beforeSource = TestWorkspace.RelativeFiles(workspace.SourceDir);
+        var beforeTarget = TestWorkspace.RelativeFiles(workspace.TargetDir);
+
+        var result = await _cli.RunAsync(workspace.SourceDir, workspace.TargetDir, "--dry-run", "--verbose");
+
+        Assert.Equal(0, result.ExitCode);
+        Assert.Equal(beforeSource, TestWorkspace.RelativeFiles(workspace.SourceDir));
+        Assert.Equal(beforeTarget, TestWorkspace.RelativeFiles(workspace.TargetDir));
+    }
+
+    [Fact]
     public async Task Move_does_not_prune_empty_source_directories_by_default()
     {
         using var workspace = new TestWorkspace();
@@ -146,14 +164,17 @@ public sealed class MoveCommandTests : IClassFixture<MoveCliFixture>
     {
         using var workspace = new TestWorkspace();
         workspace.AddSourceText("2026/08/02/file001.txt", "HDR|1", "alpha");
+        Directory.CreateDirectory(Path.Combine(workspace.SourceDir, "2026", "08", "03", "empty"));
 
         var yearDirectory = Path.Combine(workspace.SourceDir, "2026");
         var leafDirectory = Path.Combine(workspace.SourceDir, "2026", "08", "02");
+        var preExistingEmptyDirectory = Path.Combine(workspace.SourceDir, "2026", "08", "03", "empty");
 
         var result = await _cli.RunAsync(workspace.SourceDir, workspace.TargetDir, "--prune-empty-dirs");
 
         Assert.Equal(0, result.ExitCode);
         Assert.False(Directory.Exists(leafDirectory));
+        Assert.False(Directory.Exists(preExistingEmptyDirectory));
         Assert.False(Directory.Exists(yearDirectory));
         Assert.True(Directory.Exists(workspace.SourceDir));
     }
